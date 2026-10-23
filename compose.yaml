@@ -1,0 +1,48 @@
+services:
+  litellm:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    image: docker.litellm.ai/berriai/litellm:main-latest
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./litellm/config.yaml:/app/config.yaml:ro
+    environment:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?Set LITELLM_MASTER_KEY}
+    restart: unless-stopped
+    networks: [inference]
+
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    ports:
+      - "3000:8080"
+    environment:
+      OPENAI_API_BASE_URL: http://litellm:4000/v1
+      OPENAI_API_KEY: ${LITELLM_MASTER_KEY:?Set LITELLM_MASTER_KEY}
+    volumes:
+      - ${OPEN_WEBUI_DATA:?Set OPEN_WEBUI_DATA to the host directory containing the existing Open WebUI data}:/app/backend/data
+    depends_on: [litellm]
+    restart: unless-stopped
+    networks: [inference]
+
+  n8n:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    image: ghcr.io/n8n-io/n8n:latest
+    ports:
+      - "5678:5678"
+    environment:
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?Set N8N_ENCRYPTION_KEY}
+      N8N_SECURE_COOKIE: "false"
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      LITELLM_BASE_URL: http://litellm:4000/v1
+      LITELLM_API_KEY: ${LITELLM_MASTER_KEY:?Set LITELLM_MASTER_KEY}
+    volumes:
+      - ${N8N_DATA:?Set N8N_DATA to a persistent host directory}:/home/node/.n8n
+    restart: unless-stopped
+    networks: [inference]
+
+networks:
+  inference:
+    name: inference

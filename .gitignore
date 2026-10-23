@@ -1,0 +1,3 @@
+# Runtime databases, uploads, model caches, and secrets
+/data/
+.env

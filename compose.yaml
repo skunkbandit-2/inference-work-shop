@@ -2,7 +2,7 @@ services:
   litellm:
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    image: docker.litellm.ai/berriai/litellm:main-latest
+    image: docker.litellm.ai/berriai/litellm:latest
     command: ["--config", "/app/config.yaml", "--port", "4000"]
     ports:
       - "4000:4000"
@@ -10,6 +10,28 @@ services:
       - ./litellm/config.yaml:/app/config.yaml:ro
     environment:
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?Set LITELLM_MASTER_KEY}
+      LITELLM_SALT_KEY: ${LITELLM_SALT_KEY:?Set LITELLM_SALT_KEY}
+      DATABASE_URL: postgresql://litellm:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@db:5432/litellm
+      STORE_MODEL_IN_DB: "True"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks: [inference]
+
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: litellm
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      POSTGRES_DB: litellm
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U litellm"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
     networks: [inference]
 
@@ -17,9 +39,6 @@ services:
     image: ghcr.io/open-webui/open-webui:main
     ports:
       - "3000:8080"
-    environment:
-      OPENAI_API_BASE_URL: http://litellm:4000/v1
-      OPENAI_API_KEY: ${LITELLM_MASTER_KEY:?Set LITELLM_MASTER_KEY}
     volumes:
       - ${OPEN_WEBUI_DATA:?Set OPEN_WEBUI_DATA to the host directory containing the existing Open WebUI data}:/app/backend/data
     depends_on: [litellm]
@@ -35,13 +54,21 @@ services:
     environment:
       N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?Set N8N_ENCRYPTION_KEY}
       N8N_SECURE_COOKIE: "false"
+      N8N_HOST: 0.0.0.0
+      N8N_PROTOCOL: http
+      N8N_PORT: 5678
       OLLAMA_BASE_URL: http://host.docker.internal:11434
+      OLLAMA_REMOTE_BASE_URL: http://10.0.0.45:11434
       LITELLM_BASE_URL: http://litellm:4000/v1
       LITELLM_API_KEY: ${LITELLM_MASTER_KEY:?Set LITELLM_MASTER_KEY}
     volumes:
       - ${N8N_DATA:?Set N8N_DATA to a persistent host directory}:/home/node/.n8n
     restart: unless-stopped
     networks: [inference]
+
+volumes:
+  postgres_data:
+    name: inference_postgres_data
 
 networks:
   inference:

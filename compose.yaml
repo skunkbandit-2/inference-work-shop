@@ -1,13 +1,15 @@
 services:
   litellm:
+    build:
+      context: ./litellm
+      dockerfile: Dockerfile
+    image: inference-workshop-litellm:latest
     extra_hosts:
       - "host.docker.internal:host-gateway"
     image: docker.litellm.ai/berriai/litellm:latest
     command: ["--config", "/app/config.yaml", "--port", "4000"]
     ports:
       - "4000:4000"
-    volumes:
-      - ./litellm/config.yaml:/app/config.yaml:ro
     environment:
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?Set LITELLM_MASTER_KEY}
       LITELLM_SALT_KEY: ${LITELLM_SALT_KEY:?Set LITELLM_SALT_KEY}
